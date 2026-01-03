@@ -1,0 +1,1390 @@
+---
+title: "Early gonadotoxic effects of cyclophosphamide on the prepubertal testis and the feasibility of reducing toxicity through combined antioxidant therapy"
+subtitle: 'Eskafinoughani et al. (https://doi.org/10.1016/j.reprotox.2025.109156)'
+author: "The code was written by Assistant Prof. Arian Lundberg, PhD to generate main figures of the article."
+date:  "`r Sys.setlocale('LC_TIME', 'C');format(Sys.Date(),format='%B %e, %Y')`"
+header-includes:
+    - \usepackage{subfig}
+    - \usepackage{placeins}
+output:
+  bookdown::html_document2:
+    toc: TRUE
+    fig_caption: yes
+    number_sections: FALSE
+
+  bookdown::pdf_document2:
+    keep_tex: TRUE
+    toc: FALSE
+    fig_caption: yes
+    number_sections: FALSE
+
+---
+
+```{css, echo=FALSE}
+p {
+  font-size: 15px;
+}
+
+```
+
+Please do not hesitate to contact Assistant Prof. Arian Lundberg, PhD. should you have further questions at: arian.lundberg@scilifelab.se, Thank you.
+
+To make it easier to transfer the data, all data produced (including gene sets, GSEA pathways, gene counts) were saved as RData and will be reloaded here. Input data required to run this analysis are archived on Zenodo:
+
+```{r load data,include=FALSE}
+
+knitr::opts_knit$set(root.dir = "/Users/arianlundberg/arian.lundberg@scilifelab.se - Google Drive/My Drive/Publications/RTX")
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, cache=FALSE, dpi=72, warning=FALSE)
+packages <- c(
+    "openxlsx", "data.table","cowplot","igraph","rowr","annotatr","tidyr",
+    "dplyr","VennDetail","pd.clariom.d.human","writexl","clusterProfiler","doParallel",
+    "circlize", "ggplot2", "ggfortify", "singscore", "ComplexHeatmap","tidyverse","readxl","ggvenn","biomaRt","ggthemes","plyr",
+    "GSVA", "matrixStats", "plot.matrix", "rstatix", "msigdbr","kableExtra","limma","VennDetail",
+    "stringr", "ggpubr", "ConsensusClusterPlus", "neatmaps",'org.Mm.eg.db', "mclust","corrplot","pheatmap",
+    "DESeq2", "edgeR", "CMA", "ggalluvial","ggthemes","fgsea",
+    "ggsci", "AnnotationDbi", "foreach","RColorBrewer","ggrepel","doParallel")
+
+lapply(packages,require, character.only = TRUE)
+
+load(file="/Users/arianlundberg/arian.lundberg@scilifelab.se - Google Drive/My Drive/Publications/RTX/load.data.RData")
+
+comparisons <- list(c('Ctrl','CPA'),c('Ctrl','CPA+AO'),c('Ctrl','AO'),c('CPA','CPA+AO'),c('CPA','AO'),c('AO','CPA+AO'))
+```
+
+```{r Figure1E,fig.align='center',fig.width=14,fig.height=20}
+
+histology.data1 <- read.xlsx("/Users/arianlundberg/arian.lundberg@scilifelab.se - Google Drive/My Drive/Publications/RTX/Histology final.xlsx",sheet = 1)
+histology.data1$mean <- rowMeans(histology.data1[,c('S1','S2','S3','S4','S5')])
+histology.data1$sd <- rowSds(as.matrix(histology.data1[,c('S1','S2','S3','S4','S5')]))
+histology.data1$Condition <- factor(histology.data1$Condition,levels=c('C','P','PA','A'),labels = c('Ctrl','CPA','CPA+AO','AO'))
+
+histology.data2 <- read.xlsx("/Users/arianlundberg/arian.lundberg@scilifelab.se - Google Drive/My Drive/Publications/RTX/Histology final.xlsx",sheet = 2)
+histology.data2$mean <- rowMeans(histology.data2[,c('S1','S2','S3')])
+histology.data2$sd <- rowSds(as.matrix(histology.data2[,c('S1','S2','S3')]))
+histology.data2$Condition <- factor(histology.data2$Condition,levels=c('C','P','PA','A'),labels = c('Ctrl','CPA','CPA+AO','AO'))
+
+histology.data <- rbind(histology.data1[c('Marker','Condition','Time.Point','mean','sd')],
+                        histology.data2[c('Marker','Condition','Time.Point','mean','sd')])
+
+
+data <- reshape2::melt(histology.data[histology.data$Time.Point%out%0,],id.vars= c('Marker','Condition','Time.Point','mean','sd'))
+data$Time.Point <- as.factor(data$Time.Point)
+data$Marker <- factor(data$Marker,levels=c('TCC','γH2AX','CC3','Plzf','Ki67'))
+
+stat.test1 <- reshape2::melt(histology.data1[histology.data1$Time.Point%out%0,],id.vars= c('Marker','Condition','Time.Point','mean','sd')) %>%
+    group_by(Marker,Time.Point) %>%
+    t_test(value ~ Condition) %>%
+    adjust_pvalue(method = 'fdr') %>%
+    add_significance() %>%add_xy_position(x='Condition',scales = 'free_y')%>%
+    filter(p.adj <= 0.06)%>%mutate(Condition='AO')
+
+stat.test1$FDR <- round(stat.test1$p.adj,digits = 3)
+stat.test1$FDR.siginf <- stat.test1$p.adj.signif
+stat.test1$FDR.siginf[stat.test1$FDR.siginf%in%'ns'] <- stat.test1$FDR[stat.test1$FDR.siginf%in%'ns']
+
+stat.test2 <- reshape2::melt(histology.data2[histology.data2$Time.Point%out%0,],id.vars= c('Marker','Condition','Time.Point','mean','sd')) %>%
+    group_by(Marker,Time.Point) %>%
+    t_test(value ~ Condition) %>%
+    adjust_pvalue(method = 'fdr') %>%
+    add_significance() %>%add_xy_position(x='Condition',scales = 'free_y',step.increase = 0.34)%>%
+    filter(p.adj <= 0.06)%>%mutate(Condition='AO')
+
+stat.test2$FDR <- round(stat.test2$p.adj,digits = 3)
+stat.test2$FDR.siginf <- stat.test2$p.adj.signif
+stat.test2$FDR.siginf[stat.test2$FDR.siginf%in%'ns'] <- stat.test2$FDR[stat.test2$FDR.siginf%in%'ns']
+
+stat.test <- rbind(stat.test1,stat.test2)
+stat.test$Marker <- factor(stat.test$Marker,levels=c('TCC','γH2AX','CC3','Plzf','Ki67'))
+stat.test[stat.test$Marker%in%c('CC3')&stat.test$Time.Point%in%c('32'),]$y.position <- stat.test[stat.test$Marker%in%c('CC3')&stat.test$Time.Point%in%c('32'),]$y.position-3
+stat.test[stat.test$Marker%in%c('CC3')&stat.test$Time.Point%in%c('48'),]$y.position <- stat.test[stat.test$Marker%in%c('CC3')&stat.test$Time.Point%in%c('48'),]$y.position-1
+
+stat.test[stat.test$Marker%in%c('Ki67')&stat.test$Time.Point%in%c('32'),]$y.position <- stat.test[stat.test$Marker%in%c('Ki67')&stat.test$Time.Point%in%c('32'),]$y.position-5
+stat.test[stat.test$Marker%in%c('Ki67')&stat.test$Time.Point%in%c('48'),]$y.position <- stat.test[stat.test$Marker%in%c('Ki67')&stat.test$Time.Point%in%c('48'),]$y.position-3
+
+Figure1E <- ggbarplot(data[data$Time.Point%in%c('32','48'),],x = 'Condition',y='mean',position = position_identity(),fill = 'Condition')+facet_grid(~Marker~Time.Point,scales = 'free_y')+
+    geom_errorbar( aes(x=Condition, ymin=mean-sd, ymax=mean+sd), width=0.1, alpha=0.9, size=0.7) +
+    scale_fill_manual(name='Treatment groups',values = c("gray80","pink","tomato","orange2","forestgreen"),breaks = c('BT','Ctrl','CPA','CPA+AO','AO'))+
+    scale_y_continuous(expand = expansion(mult = c(0.1, 0.2)))+
+    stat_pvalue_manual(stat.test[stat.test$Time.Point%in%c('32','48'),], label = "FDR.siginf",,size = 4,tip.length = 0)+ 
+    theme_bw(base_size = 22,base_rect_size = 2)+
+    labs(y='Histology measurements',title='Timepoints',x='Treatment groups')+
+    theme(plot.title = element_text(face='bold',size=20,hjust = 0.5),legend.position="right",axis.title = element_text(face = 'bold'),
+          strip.background =element_rect(fill='white',color='white'),strip.text = element_text(face = 'bold'),axis.text.x = element_text(size = 15),
+          panel.grid = element_blank())
+
+Figure1E
+
+
+```
+
+<div align="center">
+
+###  Figure 1E
+
+</div>
+
+
+```{r Figure2A,fig.align='center',fig.width=14,fig.height=6}
+
+All.annot.df <- annot.df;All.annot.df$Treatment <- factor(All.annot.df$Treatment)
+All.df <- log.df[rownames(log.df)%in%genes.df$Genes,] 
+
+All.counts <- data.count[rownames(data.count)%in%genes.df$Genes,]
+group.cy.ctrl.48 <- factor(c('C48_6','P48_11'),levels = c('C48_6','P48_11'))
+                           
+tmp.keep <- rowSums(All.counts[,c('C48_6','P48_11')] > 0.5)>=2
+dge.cy.ctrl.48 <- DGEList(All.counts[,c('C48_6','P48_11')], group=group.cy.ctrl.48, genes=rownames(All.counts[,c('C48_6','P48_11')]))
+
+dge.cy.ctrl.48 <- dge.cy.ctrl.48[tmp.keep, ,keep.lib.sizes = FALSE]
+
+#normalize
+TMM.cy.ctrl.48 <- exactTest(calcNormFactors(dge.cy.ctrl.48, method = "TMM"),dispersion = 0)
+res.cy.ctrl.48 <- TMM.cy.ctrl.48$table
+res.cy.ctrl.48$FDR <- p.adjust(res.cy.ctrl.48$PValue,method = 'BH')
+res.cy.ctrl.48$genes <- rownames(res.cy.ctrl.48)
+
+cy.ctrl.48.genes <- data.frame(genes=res.cy.ctrl.48$genes,
+           logFC=res.cy.ctrl.48$logFC,
+           p=res.cy.ctrl.48$PValue,FDR=res.cy.ctrl.48$FDR)
+
+cy.ctrl.48.genes <- merge(cy.ctrl.48.genes,data.annot[c('gene_name','gene_biotype','tf_family','gene_description')],by.x='genes',by.y='gene_name')
+
+vol.cy.ctrl.48 <- na.omit(as.data.frame(cy.ctrl.48.genes))
+vol.cy.ctrl.48$log10p <- -log10(vol.cy.ctrl.48$FDR)
+vol.cy.ctrl.48$Status = factor(ifelse(vol.cy.ctrl.48$log10p >= 1.3 & vol.cy.ctrl.48$logFC >= 0.5849625,'Up-regulated',
+                         ifelse(vol.cy.ctrl.48$log10p >=  1.3 & vol.cy.ctrl.48$logFC < -0.5849625,'Down-regulated',
+                                'Stable')),levels = c('Up-regulated','Stable','Down-regulated'))
+
+id.labels.meta <- which(vol.cy.ctrl.48$log10p >=  1.3&abs(vol.cy.ctrl.48$logFC)>0.5849625)
+vol.cy.ctrl.48$names <- NA;vol.cy.ctrl.48[id.labels.meta,]$names <- (vol.cy.ctrl.48[id.labels.meta,]$genes)
+
+
+#####  CPA vs. Ctrl (48h)
+
+set.seed(100)
+Volcano.cy.ctrl.48 <- ggplot(data = vol.cy.ctrl.48,
+       aes(x = logFC,colour=Status,
+           y = vol.cy.ctrl.48$log10p,label=names)) +
+    geom_point( size=4) +
+    geom_text_repel(max.overlaps = 15,na.rm = T,color='black',segment.color = "grey50",size = 5)+
+    scale_color_manual(values=c("gold2", "lightgray","skyblue2"),breaks = c('Up-regulated','Stable','Down-regulated'))+
+    geom_vline(xintercept=c(-0.5849625,0.5849625),lty=4,col="black",lwd=0.5) +
+    geom_hline(yintercept = 1.3,lty=4,col="black",lwd=0.5) +
+    labs(x=expression(Log[2]~FC),
+         y=expression(-Log[10]~FDR),title='CPA vs. Ctrl (48h)')  +
+    theme_bw(base_size = 20,base_rect_size = 2)+
+    theme(plot.title = element_text(face='bold',size=20,hjust = 0.5),legend.position="bottom",
+          strip.background =element_rect(fill='white',color='white'),
+          panel.grid = element_blank())
+
+cy.ctrl.48.sig.genes <- cy.ctrl.48.genes[cy.ctrl.48.genes$FDR <=  1.3&abs(cy.ctrl.48.genes$logFC)>0.5849625,]
+
+
+
+group.ao.ctrl.48 <- factor(c('C48_6','A48_16'),levels = c('C48_6','A48_16'))
+                           
+tmp.keep <- rowSums(All.counts[,c('C48_6','A48_16')] > 0.5)>=2
+dge.ao.ctrl.48 <- DGEList(All.counts[,c('C48_6','A48_16')], group=group.ao.ctrl.48, genes=rownames(All.counts[,c('C48_6','A48_16')]))
+
+dge.ao.ctrl.48 <- dge.ao.ctrl.48[tmp.keep, ,keep.lib.sizes = FALSE]
+
+#normalize
+TMM.ao.ctrl.48 <- exactTest(calcNormFactors(dge.ao.ctrl.48, method = "TMM"),dispersion = 0)
+res.ao.ctrl.48 <- TMM.ao.ctrl.48$table
+res.ao.ctrl.48$FDR <- p.adjust(res.ao.ctrl.48$PValue,method = 'BH')
+res.ao.ctrl.48$genes <- rownames(res.ao.ctrl.48)
+
+ao.ctrl.48.genes <- data.frame(genes=res.ao.ctrl.48$genes,
+           logFC=res.ao.ctrl.48$logFC,
+           p=res.ao.ctrl.48$PValue,FDR=res.ao.ctrl.48$FDR)
+
+ao.ctrl.48.genes <- merge(ao.ctrl.48.genes,data.annot[c('gene_name','gene_biotype','tf_family','gene_description')],by.x='genes',by.y='gene_name')
+
+vol.ao.ctrl.48 <- na.omit(as.data.frame(ao.ctrl.48.genes))
+vol.ao.ctrl.48$log10p <- -log10(vol.ao.ctrl.48$FDR)
+vol.ao.ctrl.48$Status = factor(ifelse(vol.ao.ctrl.48$log10p >= 1.3 & vol.ao.ctrl.48$logFC >= 0.5849625,'Up-regulated',
+                         ifelse(vol.ao.ctrl.48$log10p >=  1.3 & vol.ao.ctrl.48$logFC < -0.5849625,'Down-regulated',
+                                'Stable')),levels = c('Up-regulated','Stable','Down-regulated'))
+
+id.labels.meta <- which(vol.ao.ctrl.48$log10p >=  1.3&abs(vol.ao.ctrl.48$logFC)>0.5849625)
+vol.ao.ctrl.48$names <- NA;vol.ao.ctrl.48[id.labels.meta,]$names <- (vol.ao.ctrl.48[id.labels.meta,]$genes)
+
+
+#####  AO vs. Ctrl (48h)
+
+set.seed(100)
+Volcano.ao.ctrl.48 <- ggplot(data = vol.ao.ctrl.48,
+       aes(x = logFC,colour=Status,
+           y = vol.ao.ctrl.48$log10p,label=names)) +
+    geom_point( size=4) +
+    geom_text_repel(max.overlaps = 15,na.rm = T,color='black',segment.color = "grey50",size = 5)+
+    scale_color_manual(values=c("gold2", "lightgray","skyblue2"),breaks = c('Up-regulated','Stable','Down-regulated'))+
+    geom_vline(xintercept=c(-0.5849625,0.5849625),lty=4,col="black",lwd=0.5) +
+    geom_hline(yintercept = 1.3,lty=4,col="black",lwd=0.5) +
+    labs(x=expression(Log[2]~FC),
+         y=expression(-Log[10]~FDR),title='AO vs. Ctrl (48h)')  +
+    theme_bw(base_size = 20,base_rect_size = 2)+
+    theme(plot.title = element_text(face='bold',size=20,hjust = 0.5),legend.position="bottom",
+          strip.background =element_rect(fill='white',color='white'),
+          panel.grid = element_blank())
+
+ao.ctrl.48.sig.genes <- ao.ctrl.48.genes[ao.ctrl.48.genes$FDR <=  1.3&abs(ao.ctrl.48.genes$logFC)>0.5849625,]
+
+
+#####  CPA+AO vs. CPA (48h) 
+
+group.comb.cy.48<- factor(c('P48_11','PA48_21'),levels=c('P48_11','PA48_21'))
+                           
+tmp.keep <- rowSums(All.counts[,c('P48_11','PA48_21')] > 0.5)>=2
+dge.comb.cy.48<- DGEList(All.counts[,c('P48_11','PA48_21')], group=group.comb.cy.48, genes=rownames(All.counts[,c('P48_11','PA48_21')]))
+dge.comb.cy.48<- dge.comb.cy.48[tmp.keep, ,keep.lib.sizes = FALSE]
+
+TMM.comb.cy.48<- exactTest(calcNormFactors(dge.comb.cy.48, method = "TMM"),dispersion = 0)
+res.comb.cy.48<- TMM.comb.cy.48$table
+res.comb.cy.48$FDR <- p.adjust(res.comb.cy.48$PValue,method = 'BH')
+res.comb.cy.48$genes <- rownames(res.comb.cy.48)
+
+comb.cy.48.genes <- data.frame(genes=res.comb.cy.48$genes,
+           logFC=res.comb.cy.48$logFC,
+           p=res.comb.cy.48$PValue,FDR=res.comb.cy.48$FDR)
+
+comb.cy.48.genes <- merge(comb.cy.48.genes,data.annot[c('gene_name','gene_biotype','tf_family','gene_description')],by.x='genes',by.y='gene_name')
+
+vol.comb.cy.48<- na.omit(as.data.frame(comb.cy.48.genes))
+vol.comb.cy.48$log10p <- -log10(vol.comb.cy.48$FDR)
+vol.comb.cy.48$Status = factor(ifelse(vol.comb.cy.48$log10p >= 1.3 & vol.comb.cy.48$logFC >= 0.5849625,'Up-regulated',
+                         ifelse(vol.comb.cy.48$log10p >=  1.3 & vol.comb.cy.48$logFC < -0.5849625,'Down-regulated',
+                                'Stable')),levels = c('Up-regulated','Stable','Down-regulated'))
+
+id.labels.meta <- which(vol.comb.cy.48$log10p >=  1.3&abs(vol.comb.cy.48$logFC)>0.5849625)
+vol.comb.cy.48$names <- NA;vol.comb.cy.48[id.labels.meta,]$names <- (vol.comb.cy.48[id.labels.meta,]$genes)
+
+set.seed(100)
+Volcano.comb.cy.48<- ggplot(data = vol.comb.cy.48,
+       aes(x = logFC,colour=Status,
+           y = vol.comb.cy.48$log10p,label=names)) +
+    geom_point(size=4) +
+    geom_text_repel(max.overlaps = 15,na.rm = T,color='black',segment.color = "grey50",size = 5)+
+    scale_color_manual(values=c("gold2", "lightgray","skyblue2"),breaks = c('Up-regulated','Stable','Down-regulated'))+
+    geom_vline(xintercept=c(-0.5849625,0.5849625),lty=4,col="black",lwd=0.5) +
+    geom_hline(yintercept = 1.3,lty=4,col="black",lwd=0.5) +
+    labs(x=expression(Log[2]~FC),
+         y=expression(-Log[10]~FDR),title='CPA+AO vs. CPA (48h)')  +
+    theme_bw(base_size = 20,base_rect_size = 2)+
+    theme(plot.title = element_text(face='bold',size=20,hjust = 0.5),legend.position="bottom",
+          strip.background =element_rect(fill='white',color='white'),
+          panel.grid = element_blank())
+
+comb.cy.48.sig.genes <- comb.cy.48.genes[comb.cy.48.genes$FDR <=  1.3&abs(comb.cy.48.genes$logFC)>0.5849625,]
+
+Figure2A <- ggarrange(Volcano.cy.ctrl.48,Volcano.comb.cy.48,Volcano.ao.ctrl.48,ncol = 3,nrow = 1,common.legend = T,legend = 'bottom',align = 'hv')
+
+set.seed(100)
+Figure2A
+
+```
+
+<div align="center">
+
+###  Figure 2A
+
+</div>
+
+```{r Figure2B,fig.align='center',fig.width=15,fig.height=15}
+
+up.list.Fig2 <- list('cy.ctrl.48'=cy.ctrl.48.sig.genes[cy.ctrl.48.sig.genes$logFC>0.5849625,]$genes,
+                    'comb.cy.48'=comb.cy.48.sig.genes[comb.cy.48.sig.genes$logFC>0.5849625,]$genes,
+                    'ao.ctrl.48'=ao.ctrl.48.sig.genes[ao.ctrl.48.sig.genes$logFC>0.5849625,]$genes)
+
+dn.list.Fig2 <- list('cy.ctrl.48'=cy.ctrl.48.sig.genes[cy.ctrl.48.sig.genes$logFC< -0.5849625,]$genes,
+                    'comb.cy.48'=comb.cy.48.sig.genes[comb.cy.48.sig.genes$logFC< -0.5849625,]$genes,
+                    'ao.ctrl.48'=ao.ctrl.48.sig.genes[ao.ctrl.48.sig.genes$logFC< -0.5849625,]$genes)
+
+
+Figure2B <- ggarrange(ggvenn(data = up.list.Fig2,fill_alpha = 1,fill_color = c('gold','gold3','gold4'),text_color = 'white',stroke_color = 'white',text_size = 10,show_percentage = F,set_name_size = 2)+labs(title='Shared/Unique\n(up-regulated genes)')+
+                                  theme(plot.title = element_text(face='bold',size=20,hjust = 0.5)),
+ggvenn(data = dn.list.Fig2,fill_alpha = 1,fill_color = c('skyblue2','blue','darkblue'),text_color = 'white',stroke_color = 'white',text_size = 10,show_percentage = F,set_name_size = 2)+labs(title='Shared/Unique\n(down-regulated genes)')+
+                                  theme(plot.title = element_text(face='bold',size=20,hjust = 0.5)),ncol = 2,nrow = 1)
+
+Figure2B
+
+```
+
+<div align="center">
+
+###  Figure 2B
+
+</div>
+
+```{r Figure2C,fig.align='center',fig.width=30,fig.height=9}
+cy.ctrl.48.sig.Upgenes.df <- cy.ctrl.48.sig.genes[cy.ctrl.48.sig.genes$logFC>0,]$genes
+cy.ctrl.48.sig.Dngenes.df <- cy.ctrl.48.sig.genes[cy.ctrl.48.sig.genes$logFC<0,]$genes
+
+set.seed(100)
+ego.cy.ctrl.48.Up <- enrichGO(gene = cy.ctrl.48.sig.Upgenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.cy.ctrl.48.Up <- ego.cy.ctrl.48.Up@result[ego.cy.ctrl.48.Up@result$p.adjust<0.05,]
+res.cy.ctrl.48.Up <- res.cy.ctrl.48.Up[order(res.cy.ctrl.48.Up$p.adjust,decreasing = F),][1:10,]
+res.cy.ctrl.48.Up$Description <- str_to_sentence(res.cy.ctrl.48.Up$Description)
+
+set.seed(100)
+ego.cy.ctrl.48.Dn <- enrichGO(gene = cy.ctrl.48.sig.Dngenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.cy.ctrl.48.Dn <- ego.cy.ctrl.48.Dn@result[ego.cy.ctrl.48.Dn@result$p.adjust<0.05,]
+res.cy.ctrl.48.Dn <- res.cy.ctrl.48.Dn[order(res.cy.ctrl.48.Dn$p.adjust,decreasing = F),][1:10,]
+res.cy.ctrl.48.Dn$Description <- str_to_sentence(res.cy.ctrl.48.Dn$Description)
+res.cy.ctrl.48.Dn$Count <- res.cy.ctrl.48.Dn$Count*-1
+
+res.cy.ctrl.48 <- rbind(res.cy.ctrl.48.Up,res.cy.ctrl.48.Dn)
+res.cy.ctrl.48$Status <- factor(rep(c('Up','Down'),each=10),levels = c('Up','Down'))
+
+res.cy.ctrl.48.BP.plot <- ggplot(res.cy.ctrl.48, aes(y=reorder(paste(Description, Status), Count), x=Count)) +
+    geom_col(aes(fill=res.cy.ctrl.48$Status%in%'Up'), width = 0.5, position = position_dodge(0.9)) +
+    scale_fill_manual(values = c('skyblue3','gold3'), breaks= c('FALSE','TRUE'),
+                      labels = c('Enriched in Down-regulated genes', 'Enriched in Up-regulated genes'),
+                      name = ' ') +
+    labs(y = "Biological processes", x = "Gene counts", title = "CPA vs. Ctrl (48h)") +
+    scale_x_continuous(labels = abs) + 
+    theme_hc(base_size = 20) +
+    theme(strip.background.x = element_blank(), panel.grid = element_blank(),
+          axis.title.x = element_text(size = 15, face = 'plain'),
+          title = element_text(face = 'bold', size = 20),
+          strip.text.x = element_blank(), legend.position = 'none',
+          axis.text.x = element_text(size = 15, face = 'bold'),
+          axis.text.y = element_text(size = 15)) +
+    scale_y_discrete(labels = function(x) gsub(" Up| Down", "", x))
+
+comb.cy.48.sig.Upgenes.df <- comb.cy.48.sig.genes[comb.cy.48.sig.genes$logFC>0,]$genes
+comb.cy.48.sig.Dngenes.df <- comb.cy.48.sig.genes[comb.cy.48.sig.genes$logFC<0,]$genes
+
+set.seed(100)
+ego.comb.cy.48.Up <- enrichGO(gene = comb.cy.48.sig.Upgenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.comb.cy.48.Up <- ego.comb.cy.48.Up@result[ego.comb.cy.48.Up@result$p.adjust<0.05,]
+res.comb.cy.48.Up <- res.comb.cy.48.Up[order(res.comb.cy.48.Up$p.adjust,decreasing = F),][1:10,]
+res.comb.cy.48.Up$Description <- str_to_sentence(res.comb.cy.48.Up$Description)
+
+set.seed(100)
+ego.comb.cy.48.Dn <- enrichGO(gene = comb.cy.48.sig.Dngenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.comb.cy.48.Dn <- ego.comb.cy.48.Dn@result[ego.comb.cy.48.Dn@result$p.adjust<0.05,]
+res.comb.cy.48.Dn <- res.comb.cy.48.Dn[order(res.comb.cy.48.Dn$p.adjust,decreasing = F),][1:10,]
+res.comb.cy.48.Dn$Description <- str_to_sentence(res.comb.cy.48.Dn$Description)
+res.comb.cy.48.Dn$Count <- res.comb.cy.48.Dn$Count*-1
+
+res.comb.cy.48 <- rbind(res.comb.cy.48.Up,res.comb.cy.48.Dn)
+res.comb.cy.48$Status <- factor(rep(c('Up','Down'),each=10),levels = c('Up','Down'))
+
+res.comb.cy.48.BP.plot <- ggplot(res.comb.cy.48, aes(y=reorder(paste(Description, Status), Count), x=Count)) +
+    geom_col(aes(fill=res.comb.cy.48$Status%in%'Up'), width = 0.5, position = position_dodge(0.9)) +
+    scale_fill_manual(values = c('skyblue3','gold3'), breaks= c('FALSE','TRUE'),
+                      labels = c('Enriched in Down-regulated genes', 'Enriched in Up-regulated genes'),
+                      name = ' ') +
+    labs(y = "Biological processes", x = "Gene counts", title = "CPA+AO vs. CPA (48h)") +
+    scale_x_continuous(labels = abs) + 
+    theme_hc(base_size = 20) +
+    theme(strip.background.x = element_blank(), panel.grid = element_blank(),
+          axis.title.x = element_text(size = 20, face = 'plain'),
+          title = element_text(face = 'bold', size = 20),
+          strip.text.x = element_blank(), legend.position = 'none',
+          axis.text.x = element_text(size = 15, face = 'bold'),
+          axis.text.y = element_text(size = 15)) +
+    scale_y_discrete(labels = function(x) gsub(" Up| Down", "", x))
+
+
+ao.ctrl.48.sig.Upgenes.df <- ao.ctrl.48.sig.genes[ao.ctrl.48.sig.genes$logFC>0,]$genes
+ao.ctrl.48.sig.Dngenes.df <- ao.ctrl.48.sig.genes[ao.ctrl.48.sig.genes$logFC<0,]$genes
+
+set.seed(100)
+ego.ao.ctrl.48.Up <- enrichGO(gene = ao.ctrl.48.sig.Upgenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.ao.ctrl.48.Up <- ego.ao.ctrl.48.Up@result[ego.ao.ctrl.48.Up@result$p.adjust<0.05,]
+res.ao.ctrl.48.Up <- res.ao.ctrl.48.Up[order(res.ao.ctrl.48.Up$p.adjust,decreasing = F),][1:10,]
+res.ao.ctrl.48.Up$Description <- str_to_sentence(res.ao.ctrl.48.Up$Description)
+
+set.seed(100)
+ego.ao.ctrl.48.Dn <- enrichGO(gene = ao.ctrl.48.sig.Dngenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.ao.ctrl.48.Dn <- ego.ao.ctrl.48.Dn@result[ego.ao.ctrl.48.Dn@result$p.adjust<0.05,]
+res.ao.ctrl.48.Dn <- res.ao.ctrl.48.Dn[order(res.ao.ctrl.48.Dn$p.adjust,decreasing = F),][1:10,]
+res.ao.ctrl.48.Dn$Description <- str_to_sentence(res.ao.ctrl.48.Dn$Description)
+res.ao.ctrl.48.Dn$Count <- res.ao.ctrl.48.Dn$Count*-1
+
+res.ao.ctrl.48 <- rbind(res.ao.ctrl.48.Up,res.ao.ctrl.48.Dn)
+res.ao.ctrl.48$Status <- factor(rep(c('Up','Down'),each=10),levels = c('Up','Down'))
+
+res.ao.ctrl.48.BP.plot <- ggplot(res.ao.ctrl.48, aes(y=reorder(paste(Description, Status), Count), x=Count)) +
+    geom_col(aes(fill=res.ao.ctrl.48$Status%in%'Up'), width = 0.5, position = position_dodge(0.9)) +
+    scale_fill_manual(values = c('skyblue3','gold3'), breaks= c('FALSE','TRUE'),
+                      labels = c('Enriched in Down-regulated genes', 'Enriched in Up-regulated genes'),
+                      name = ' ') +
+    labs(y = "Biological processes", x = "Gene counts", title = "AO vs. Ctrl (48h)") +
+    scale_x_continuous(labels = abs) + 
+    theme_hc(base_size = 20) +
+    theme(strip.background.x = element_blank(), panel.grid = element_blank(),
+          axis.title.x = element_text(size = 20, face = 'plain'),
+          title = element_text(face = 'bold', size = 20),
+          strip.text.x = element_blank(), legend.position = 'none',
+          axis.text.x = element_text(size = 15, face = 'bold'),
+          axis.text.y = element_text(size = 15)) +
+    scale_y_discrete(labels = function(x) gsub(" Up| Down", "", x))
+
+res.cy.ctrl.48.BP.plot
+res.comb.cy.48.BP.plot
+res.ao.ctrl.48.BP.plot
+
+```
+
+<div align="center">
+
+###  Figure 2C
+
+</div>
+
+```{r Fig3Heatmap,fig.align='center',fig.width=8,fig.height=8}
+Apoptosis.annot.df <- annot.df[1:11,];Apoptosis.annot.df$Treatment <- factor(Apoptosis.annot.df$Treatment)
+Apoptosis.df <- log.df[rownames(log.df)%in%genes.df[genes.df$Groups%in%'Hallmark Apoptosis',]$Genes,1:11] 
+
+
+col_fun = colorRamp2(c(-2,-1,0,1,2), c("royalblue4","royalblue2","white","gold4","gold"))
+col_color.heatmap = list('Treatment' =treatment_colors,
+                      'Time'=time_colors)
+
+colAnnot.Apoptosis = columnAnnotation(
+    'Treatment'=Apoptosis.annot.df$Treatment,
+    'Time'=Apoptosis.annot.df$Time,
+    col=col_color.heatmap,annotation_height=unit(c(rep(0.2,2)), "cm"),gp=gpar(col="white",lwd=0),show_legend=T,
+    annotation_name_gp= gpar(fontsize = 12))
+
+ht_opt$TITLE_PADDING = unit(c(5,5), "points")
+Apoptosis.zscore <- na.omit(t(scale(t(Apoptosis.df))))
+
+clust.row.Apoptosis <- hcopt(as.dist(1-cor(t(Apoptosis.zscore))),method="ward.D")
+
+Apoptosis.zscore.lables <- merge(data.frame(Samples=colnames(Apoptosis.zscore)),annot.df,by='Samples',sort=F)
+
+set.seed(5)
+Figure3A <- draw(Heatmap(matrix = (Apoptosis.zscore),name = 'z-score (log2 FPKM+1)',border = T,
+                             cluster_row_slices = F,
+                             cluster_rows = clust.row.Apoptosis,
+                             column_dend_height = unit(5,'mm'),
+                             row_dend_width = unit(5,'mm'),
+                             row_dend_side = 'right',
+                             show_column_names = T,
+                             heatmap_legend_param = list(direction='horizontal'),
+                             rect_gp = gpar(col = "white", lwd = 0),column_labels = paste0(Apoptosis.zscore.lables$Treatment,"_",Apoptosis.zscore.lables$Time),
+                             show_heatmap_legend = T,show_parent_dend_line = F,
+                             top_annotation = colAnnot.Apoptosis,use_raster = F,
+                             col=col_fun,row_title = 'Hallmark of Apoptosis',
+                             width = ncol(Apoptosis.zscore)*unit(8, "mm"),
+                             row_title_gp = gpar(fontsize=12,fontface='bold'),show_row_names = F,
+                            ,row_dend_reorder = T),
+                    heatmap_legend_side='bottom',annotation_legend_side='right')
+ht_opt(RESET = TRUE)
+
+```
+
+<div align="center">
+
+###  Figure 3A
+
+</div>
+
+```{r Figure3B,fig.align='center',fig.width=8,fig.height=6}
+
+data.APOP.PCA <- t(Apoptosis.df)
+
+merged.data.APOP.PCA <- merge(data.APOP.PCA,Apoptosis.annot.df,by.x='row.names',by.y='Samples',sort=F);rownames(merged.data.APOP.PCA) <- merged.data.APOP.PCA$Row.names;merged.data.APOP.PCA <- merged.data.APOP.PCA[,-1]
+tmp.APOP.PCA <- merged.data.APOP.PCA[,c(1:(ncol(merged.data.APOP.PCA)-(ncol(Apoptosis.annot.df)-1)))]
+PCA <- prcomp(tmp.APOP.PCA)
+
+Figure3B <- autoplot(PCA,data=merged.data.APOP.PCA,colour='Time',frame=F,size=8,label.size=2,type=23,shape='Treatment')+
+    scale_fill_manual(breaks = names(time_colors),values = as.character(time_colors))+
+    scale_color_manual(breaks = names(time_colors),values = as.character(time_colors))+
+    theme_bw(base_size = 15,base_rect_size = 2)+theme(legend.position = 'right',strip.background.x = element_blank(),panel.grid = element_blank(),strip.text.x = element_blank())
+
+Figure3B
+```
+
+<div align="center">
+
+###  Figure 3B
+</div>
+
+```{r Figure3C,fig.align='center',fig.width=6,fig.height=6}
+gsva.Apoptosis <- gsva.df.subset[gsva.df.subset$Treatment%in%c('BT','Ctrl','CPA'),]
+
+Figure3C <- ggline(data = gsva.Apoptosis,
+       x = 'Time',y = 'HALLMARK_APOPTOSIS',group = 'Treatment',color = 'Treatment',size = 2,point.size = 7,
+       palette = c(treatment_colors[1:3]),xlab = 'Time (hours)',ylab = 'Apoptosis signature activity')+
+        theme_bw(base_size = 15,base_rect_size = 2)+
+        theme(legend.position = 'none',strip.background.x = element_blank(),
+              panel.grid = element_blank(),strip.text.x = element_blank())
+
+Figure3C
+```
+
+<div align="center">
+
+###  Figure 3C
+
+</div>
+
+```{r Figure3DE,fig.align='center',fig.width=14,fig.height=8}
+
+Apoptosis.counts <- data.count[rownames(data.count)%in%genes.df[genes.df$Groups%in%'Hallmark Apoptosis',]$Genes,2:11]
+group.cy.ctrl.16 <- factor(c('C16_3','P16_8'))
+                           
+tmp.keep <- rowSums(Apoptosis.counts[,c('C16_3','P16_8')] > 0.5)>=2
+dge.cy.ctrl.16 <- DGEList(Apoptosis.counts[,c('C16_3','P16_8')], group=group.cy.ctrl.16, genes=rownames(Apoptosis.counts[,c('C16_3','P16_8')]))
+
+dge.cy.ctrl.16 <- dge.cy.ctrl.16[tmp.keep, ,keep.lib.sizes = FALSE]
+
+#normalize
+TMM.cy.ctrl.16 <- exactTest(calcNormFactors(dge.cy.ctrl.16, method = "TMM"),dispersion = 0)
+res.cy.ctrl.16 <- TMM.cy.ctrl.16$table
+res.cy.ctrl.16$FDR <- p.adjust(res.cy.ctrl.16$PValue,method = 'BH')
+res.cy.ctrl.16$genes <- rownames(res.cy.ctrl.16)
+
+cy.ctrl.16.genes <- data.frame(genes=res.cy.ctrl.16$genes,
+           logFC=res.cy.ctrl.16$logFC,
+           p=res.cy.ctrl.16$PValue,FDR=res.cy.ctrl.16$FDR)
+
+cy.ctrl.16.genes <- merge(cy.ctrl.16.genes,data.annot[c('gene_name','gene_biotype','tf_family','gene_description')],by.x='genes',by.y='gene_name')
+
+vol.cy.ctrl.16 <- na.omit(as.data.frame(cy.ctrl.16.genes))
+vol.cy.ctrl.16$log10p <- -log10(vol.cy.ctrl.16$FDR)
+vol.cy.ctrl.16$Status = factor(ifelse(vol.cy.ctrl.16$log10p >= 1.3 & vol.cy.ctrl.16$logFC >= 0.5849625,'Up-regulated',
+                         ifelse(vol.cy.ctrl.16$log10p >=  1.3 & vol.cy.ctrl.16$logFC < -0.5849625,'Down-regulated',
+                                'Stable')),levels = c('Up-regulated','Stable','Down-regulated'))
+
+id.labels.meta <- which(vol.cy.ctrl.16$log10p >=  1.3&abs(vol.cy.ctrl.16$logFC)>0.5849625)
+vol.cy.ctrl.16$names <- NA;vol.cy.ctrl.16[id.labels.meta,]$names <- (vol.cy.ctrl.16[id.labels.meta,]$genes)
+
+set.seed(100)
+Volcano.cy.ctrl.16 <- ggplot(data = vol.cy.ctrl.16,
+       aes(x = logFC,colour=Status,
+           y = vol.cy.ctrl.16$log10p,label=names)) +
+    geom_point( size=4) +
+    geom_text_repel(max.overlaps = 25,na.rm = T,color='black',segment.color = "grey50",size = 5)+
+    scale_color_manual(values=c("gold2", "lightgray","skyblue2"),breaks = c('Up-regulated','Stable','Down-regulated'))+
+    geom_vline(xintercept=c(-0.5849625,0.5849625),lty=4,col="black",lwd=0.5) +
+    geom_hline(yintercept = 1.3,lty=4,col="black",lwd=0.5) +
+    labs(x=expression(Log[2]~FC),
+         y=expression(-Log[10]~FDR),title='CPA vs. Ctrl (16h)')  +
+    theme_bw(base_size = 20,base_rect_size = 2)+
+    theme(plot.title = element_text(face='bold',size=20,hjust = 0.5),legend.position="bottom",
+          strip.background =element_rect(fill='white',color='white'),
+          panel.grid = element_blank())
+
+cy.ctrl.16.sig.genes <- cy.ctrl.16.genes[cy.ctrl.16.genes$FDR <=  1.3&abs(cy.ctrl.16.genes$logFC)>0.5849625,]
+#####  P 16 vs. 24
+
+group.cy.24.16<- factor(c('P16_8','P24_9'),levels = c('P16_8','P24_9'))
+                           
+tmp.keep <- rowSums(Apoptosis.counts[,c('P16_8','P24_9')] > 0.5)>=2
+dge.cy.24.16<- DGEList(Apoptosis.counts[,c('P16_8','P24_9')], group=group.cy.24.16, genes=rownames(Apoptosis.counts[,c('P16_8','P24_9')]))
+dge.cy.24.16<- dge.cy.24.16[tmp.keep, ,keep.lib.sizes = FALSE]
+
+TMM.cy.24.16<- exactTest(calcNormFactors(dge.cy.24.16, method = "TMM"),dispersion = 0)
+res.cy.24.16<- TMM.cy.24.16$table
+res.cy.24.16$FDR <- p.adjust(res.cy.24.16$PValue,method = 'BH')
+res.cy.24.16$genes <- rownames(res.cy.24.16)
+
+cy.24.16.genes <- data.frame(genes=res.cy.24.16$genes,
+           logFC=res.cy.24.16$logFC,
+           p=res.cy.24.16$PValue,FDR=res.cy.24.16$FDR)
+
+cy.24.16.genes <- merge(cy.24.16.genes,data.annot[c('gene_name','gene_biotype','tf_family','gene_description')],by.x='genes',by.y='gene_name')
+
+vol.cy.24.16<- na.omit(as.data.frame(cy.24.16.genes))
+vol.cy.24.16$log10p <- -log10(vol.cy.24.16$FDR)
+vol.cy.24.16$Status = factor(ifelse(vol.cy.24.16$log10p >= 1.3 & vol.cy.24.16$logFC >= 0.5849625,'Up-regulated',
+                         ifelse(vol.cy.24.16$log10p >=  1.3 & vol.cy.24.16$logFC < -0.5849625,'Down-regulated',
+                                'Stable')),levels = c('Up-regulated','Stable','Down-regulated'))
+
+id.labels.meta <- which(vol.cy.24.16$log10p >=  1.3&abs(vol.cy.24.16$logFC)>0.5849625)
+vol.cy.24.16$names <- NA;vol.cy.24.16[id.labels.meta,]$names <- (vol.cy.24.16[id.labels.meta,]$genes)
+
+set.seed(100)
+Volcano.cy.24.16<- ggplot(data = vol.cy.24.16,
+       aes(x = logFC,colour=Status,
+           y = vol.cy.24.16$log10p,label=names)) +
+    geom_point(size=4) +
+    geom_text_repel(max.overlaps = 25,na.rm = T,color='black',segment.color = "grey50",size = 5)+
+    scale_color_manual(values=c("gold2", "lightgray","skyblue2"),breaks = c('Up-regulated','Stable','Down-regulated'))+
+    geom_vline(xintercept=c(-0.5849625,0.5849625),lty=4,col="black",lwd=0.5) +
+    geom_hline(yintercept = 1.3,lty=4,col="black",lwd=0.5) +
+    labs(x=expression(Log[2]~FC),
+         y=expression(-Log[10]~FDR),title='CPA (24h vs. 16h)')  +
+    theme_bw(base_size = 20,base_rect_size = 2)+
+    theme(plot.title = element_text(face='bold',size=20,hjust = 0.5),legend.position="bottom",
+          strip.background =element_rect(fill='white',color='white'),
+          panel.grid = element_blank())
+
+cy.24.16.sig.genes <- cy.24.16.genes[cy.24.16.genes$FDR <=  1.3&abs(cy.24.16.genes$logFC)>0.5849625,]
+
+Figure3DE <- ggarrange(Volcano.cy.ctrl.16,Volcano.cy.24.16,ncol = 2,nrow = 1,common.legend = T,legend = 'bottom',align = 'hv')
+
+set.seed(100)
+Figure3DE
+
+```
+
+<div align="center">
+
+###  Figure 3D and Figure 3E
+
+</div>
+
+```{r Figure3F,fig.align='center',fig.width=5,fig.height=10}
+
+up.list.Fig3 <- list('CT.C.16'=cy.ctrl.16.sig.genes[cy.ctrl.16.sig.genes$logFC>0.5849625,]$genes,
+                    'CT.24.16'=cy.24.16.sig.genes[cy.24.16.sig.genes$logFC>0.5849625,]$genes)
+
+dn.list.Fig3 <- list('CT.C.16'=cy.ctrl.16.sig.genes[cy.ctrl.16.sig.genes$logFC< -0.5849625,]$genes,
+                    'CT.24.16'=cy.24.16.sig.genes[cy.24.16.sig.genes$logFC< -0.5849625,]$genes)
+
+
+Figure3F <- ggarrange(ggvenn(data = up.list.Fig3,fill_alpha = 1,fill_color = c('gold2','gold4'),text_color = 'white',stroke_color = 'white',text_size = 10,show_percentage = F,set_name_size = 0)+labs(title='Shared/Unique\n(up-regulated genes)')+
+                                  theme(plot.title = element_text(face='bold',size=20,hjust = 0.5)),
+ggvenn(data = dn.list.Fig3,fill_alpha = 1,fill_color = c('skyblue2','darkblue'),text_color = 'white',stroke_color = 'white',text_size = 10,show_percentage = F,set_name_size = 0)+labs(title='Shared/Unique\n(down-regulated genes)')+
+                                  theme(plot.title = element_text(face='bold',size=20,hjust = 0.5)),ncol = 1,nrow = 2)
+
+Figure3F
+
+```
+
+<div align="center">
+
+###  Figure 3F
+
+</div>
+
+```{r Figure3GH,fig.align='center',fig.width=18,fig.height=9}
+
+cy.ctrl.16.sig.Upgenes.df <- cy.ctrl.16.sig.genes[cy.ctrl.16.sig.genes$logFC>0,]$genes
+cy.ctrl.16.sig.Dngenes.df <- cy.ctrl.16.sig.genes[cy.ctrl.16.sig.genes$logFC<0,]$genes
+
+set.seed(100)
+ego.cy.ctrl.16.Up <- enrichGO(gene = cy.ctrl.16.sig.Upgenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.cy.ctrl.16.Up <- ego.cy.ctrl.16.Up@result[ego.cy.ctrl.16.Up@result$p.adjust<0.05,]
+res.cy.ctrl.16.Up <- res.cy.ctrl.16.Up[order(res.cy.ctrl.16.Up$p.adjust,decreasing = F),][1:10,]
+res.cy.ctrl.16.Up$Description <- str_to_sentence(res.cy.ctrl.16.Up$Description)
+
+set.seed(100)
+ego.cy.ctrl.16.Dn <- enrichGO(gene = cy.ctrl.16.sig.Dngenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.cy.ctrl.16.Dn <- ego.cy.ctrl.16.Dn@result[ego.cy.ctrl.16.Dn@result$p.adjust<0.05,]
+res.cy.ctrl.16.Dn <- res.cy.ctrl.16.Dn[order(res.cy.ctrl.16.Dn$p.adjust,decreasing = F),][1:10,]
+res.cy.ctrl.16.Dn$Description <- str_to_sentence(res.cy.ctrl.16.Dn$Description)
+res.cy.ctrl.16.Dn$Count <- res.cy.ctrl.16.Dn$Count*-1
+
+res.cy.ctrl.16 <- rbind(res.cy.ctrl.16.Up,res.cy.ctrl.16.Dn)
+res.cy.ctrl.16$Status <- factor(ifelse(res.cy.ctrl.16$Count>0,'Up','Down'),levels = c('Up','Down'))
+
+res.cy.ctrl.16.BP.plot <- ggplot(res.cy.ctrl.16, aes(y=reorder(paste(Description, Status), Count), x=Count)) +
+    geom_col(aes(fill=res.cy.ctrl.16$Status%in%'Up'), width = 0.5, position = position_dodge(0.9)) +
+    scale_fill_manual(values = c('skyblue3','gold3'), breaks= c('FALSE','TRUE'),
+                      labels = c('Enriched in Down-regulated genes', 'Enriched in Up-regulated genes'),
+                      name = ' ') +
+    labs(y = "Biological processes", x = "Gene counts", title = "CPA vs. Ctrl (16h)") +
+    scale_x_continuous(labels = abs) + 
+    theme_hc(base_size = 15) +
+    theme(strip.background.x = element_blank(), panel.grid = element_blank(),
+          axis.title.x = element_text(size = 15, face = 'plain'),
+          title = element_text(face = 'bold', size = 12),
+          strip.text.x = element_blank(), legend.position = 'none',
+          axis.text.x = element_text(size = 15, face = 'bold'),
+          axis.text.y = element_text(size = 12)) +
+    scale_y_discrete(labels = function(x) gsub(" Up| Down", "", x))
+
+cy.24.16.sig.Upgenes.df <- cy.24.16.sig.genes[cy.24.16.sig.genes$logFC>0,]$genes
+cy.24.16.sig.Dngenes.df <- cy.24.16.sig.genes[cy.24.16.sig.genes$logFC<0,]$genes
+
+set.seed(100)
+ego.cy.24.16.Up <- enrichGO(gene = cy.24.16.sig.Upgenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.cy.24.16.Up <- ego.cy.24.16.Up@result[ego.cy.24.16.Up@result$p.adjust<0.05,]
+res.cy.24.16.Up <- res.cy.24.16.Up[order(res.cy.24.16.Up$p.adjust,decreasing = F),][1:10,]
+res.cy.24.16.Up$Description <- str_to_sentence(res.cy.24.16.Up$Description)
+
+set.seed(100)
+ego.cy.24.16.Dn <- enrichGO(gene = cy.24.16.sig.Dngenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.cy.24.16.Dn <- ego.cy.24.16.Dn@result[ego.cy.24.16.Dn@result$p.adjust<0.05,]
+res.cy.24.16.Dn <- res.cy.24.16.Dn[order(res.cy.24.16.Dn$p.adjust,decreasing = F),][1:10,]
+res.cy.24.16.Dn$Description <- str_to_sentence(res.cy.24.16.Dn$Description)
+res.cy.24.16.Dn$Count <- res.cy.24.16.Dn$Count*-1
+
+res.cy.24.16 <- rbind(res.cy.24.16.Up,res.cy.24.16.Dn)
+res.cy.24.16$Status <- factor(rep(c('Up','Down'),each=10),levels = c('Up','Down'))
+
+res.cy.24.16.BP.plot <- ggplot(res.cy.24.16, aes(y=reorder(Description, Count), x=Count)) +
+    geom_col(aes(fill=res.cy.24.16$Status%in%'Up'),width = 0.5,position = position_dodge(0.9)) +
+    scale_fill_manual(values = c('skyblue3','gold3'),breaks= c('FALSE','TRUE'),labels=c('Enriched in Down-regulated genes','Enriched in Up-regulated genes'),name=' ')+
+    labs(y="Biological processes", x="Gene counts",title = "CPA (24h vs. 16h)") +
+    scale_x_continuous(labels = abs)+theme_hc(base_size = 15)+
+    theme(strip.background.x = element_blank(),panel.grid = element_blank(),
+          axis.title.x = element_text(size=15,face = 'plain'),
+          title = element_text(face = 'bold',size = 12),
+          strip.text.x = element_blank(),legend.position = 'none',
+          axis.text.x= element_text(size = 15,face = 'bold'),
+          axis.text.y= element_text(size = 12))
+
+Figure3GH <- ggarrange(res.cy.ctrl.16.BP.plot,
+                          res.cy.24.16.BP.plot,common.legend = T,legend = 'bottom')
+Figure3GH
+
+```
+
+<div align="center">
+
+###  Figure 3G and Figure 3H
+
+</div>
+
+```{r Figure4A,fig.align='center',fig.width=6,fig.height=8}
+sperm.df <- stack(sperm.list);colnames(sperm.df) <- c("Gene", "CellType")
+sperm.df <- rbind(data.frame(Gene='Mki67',CellType='Ki67'),sperm.df)
+sperm.df <- sperm.df[!duplicated(sperm.df$Gene),]
+
+CellType.annot.df <- annot.df[1:11,];CellType.annot.df$Treatment <- factor(CellType.annot.df$Treatment)
+CellType.df <- log.df[rownames(log.df)%in%sperm.df$Gene,1:11] 
+
+col_fun = colorRamp2(c(-2,-1,0,1,2), c("royalblue4","royalblue2","white","gold4","gold"))
+col_color.heatmap = list('Treatment' =treatment_colors,
+                      'Time'=time_colors)
+
+colAnnot.CellType = columnAnnotation(
+    'Treatment'=CellType.annot.df$Treatment,
+    'Time'=CellType.annot.df$Time,
+    col=col_color.heatmap,annotation_height=unit(c(rep(0.2,2)), "cm"),gp=gpar(col="white",lwd=0),show_legend=T,
+    annotation_name_gp= gpar(fontsize = 12))
+
+ht_opt$TITLE_PADDING = unit(c(5,5), "points")
+CellType.zscore <- na.omit(t(scale(t(CellType.df))))
+
+clust.row.CellType <- hcopt(as.dist(1-cor(t(CellType.zscore))),method="ward.D")
+
+set.seed(5)
+Figure4A <- draw(Heatmap(matrix = (CellType.zscore),name = 'z-score (log2 FPKM+1)',border = T,
+                             row_split = sperm.df$CellType,
+                             cluster_row_slices = F,
+                             column_dend_height = unit(5,'mm'),
+                             row_dend_width = unit(5,'mm'),
+                             row_dend_side = 'right',
+                             show_column_names = F,
+                             heatmap_legend_param = list(direction='horizontal'),
+                             rect_gp = gpar(col = "white", lwd = 0),
+                             show_heatmap_legend = T,show_parent_dend_line = F,
+                             top_annotation = colAnnot.CellType,use_raster = F,
+                             col=col_fun,
+                             width = ncol(CellType.zscore)*unit(8, "mm"),
+                             row_title_gp = gpar(fontsize=12,fontface='bold'),show_row_names = F,
+                            ,row_dend_reorder = T),
+                    heatmap_legend_side='bottom',annotation_legend_side='right')
+ht_opt(RESET = TRUE)
+
+```
+
+<div align="center">
+
+###  Figure 4A
+
+</div>
+
+```{r Figure4B,fig.align='center',fig.width=8,fig.height=6}
+
+data.CELL.PCA <- t(CellType.df)
+
+merged.data.CELL.PCA <- merge(data.CELL.PCA,CellType.annot.df,by.x='row.names',by.y='Samples',sort=F);rownames(merged.data.CELL.PCA) <- merged.data.CELL.PCA$Row.names;merged.data.CELL.PCA <- merged.data.CELL.PCA[,-1]
+tmp.CELL.PCA <- merged.data.CELL.PCA[,c(1:(ncol(merged.data.CELL.PCA)-(ncol(CellType.annot.df)-1)))]
+PCA <- prcomp(tmp.CELL.PCA)
+
+Figure4B <- autoplot(PCA,data=merged.data.CELL.PCA,colour='Time',frame=F,size=8,label.size=2,type=23,shape='Treatment')+
+    scale_fill_manual(breaks = names(time_colors),values = as.character(time_colors))+
+    scale_color_manual(breaks = names(time_colors),values = as.character(time_colors))+
+    theme_bw(base_size = 15,base_rect_size = 2)+theme(legend.position = 'right',strip.background.x = element_blank(),panel.grid = element_blank(),strip.text.x = element_blank())
+
+Figure4B
+```
+
+<div align="center">
+
+###  Figure 4B
+
+</div>
+
+```{r Figure4C,fig.align='center',fig.width=8,fig.height=8}
+gsva.CellType <- gsva.df.subset[gsva.df.subset$Treatment%in%c('BT','Ctrl','CPA'),]
+
+gsva.CellType <- merge(gsva.CellType,t(CellType.df['Mki67',]),
+                       by.x='Samples',by.y='row.names')
+colnames(gsva.CellType)[10] <- 'Ki67'
+
+gsva.CellType.melted <- reshape2::melt(gsva.CellType[,-6])
+
+Figure4C <- ggline(data = gsva.CellType.melted,
+       x = 'Time',y = 'value',group = 'Treatment',color = 'Treatment',size = 1,point.size = 4,
+       palette = c(treatment_colors[1:3]),xlab = 'Time (hours)',ylab = 'Cell type & proliferation markers')+
+    facet_wrap(~variable,scales = 'free')+
+    theme_pubclean(base_size = 20)+
+    theme_bw(base_size = 20)+
+    theme(strip.background.x = element_blank(),panel.grid = element_blank(),
+          axis.title = element_text(size=20,face = 'bold'),legend.position = 'none',
+          strip.background =element_rect(fill='white',color='black'),strip.text = element_text(face = 'bold'),
+          axis.text.x= element_text(size = 20,face = 'bold'),axis.text.y= element_text(size = 15,face = 'bold'))
+
+Figure4C
+```
+
+<div align="center">
+
+###  Figure 4C
+
+</div>
+
+```{r Figure4DE,fig.align='center',fig.width=14,fig.height=8}
+
+CellType.counts <- data.count[rownames(data.count)%in%sperm.df$Gene,2:11]
+group.cy.ctrl.16 <- factor(c('C16_3','P16_8'),levels = c('C16_3','P16_8'))
+                           
+tmp.keep <- rowSums(CellType.counts[,c('C16_3','P16_8')] > 0.5)>=2
+dge.cy.ctrl.16 <- DGEList(CellType.counts[,c('C16_3','P16_8')], group=group.cy.ctrl.16, genes=rownames(CellType.counts[,c('C16_3','P16_8')]))
+
+dge.cy.ctrl.16 <- dge.cy.ctrl.16[tmp.keep, ,keep.lib.sizes = FALSE]
+
+#normalize
+TMM.cy.ctrl.16 <- exactTest(calcNormFactors(dge.cy.ctrl.16, method = "TMM"),dispersion = 0)
+res.cy.ctrl.16 <- TMM.cy.ctrl.16$table
+res.cy.ctrl.16$FDR <- p.adjust(res.cy.ctrl.16$PValue,method = 'BH')
+res.cy.ctrl.16$genes <- rownames(res.cy.ctrl.16)
+
+cy.ctrl.16.genes <- data.frame(genes=res.cy.ctrl.16$genes,
+           logFC=res.cy.ctrl.16$logFC,
+           p=res.cy.ctrl.16$PValue,FDR=res.cy.ctrl.16$FDR)
+
+cy.ctrl.16.genes <- merge(cy.ctrl.16.genes,data.annot[c('gene_name','gene_biotype','tf_family','gene_description')],by.x='genes',by.y='gene_name')
+
+vol.cy.ctrl.16 <- na.omit(as.data.frame(cy.ctrl.16.genes))
+vol.cy.ctrl.16$log10p <- -log10(vol.cy.ctrl.16$FDR)
+vol.cy.ctrl.16$Status = factor(ifelse(vol.cy.ctrl.16$log10p >= 1.3 & vol.cy.ctrl.16$logFC >= 0.5849625,'Up-regulated',
+                         ifelse(vol.cy.ctrl.16$log10p >=  1.3 & vol.cy.ctrl.16$logFC < -0.5849625,'Down-regulated',
+                                'Stable')),levels = c('Up-regulated','Stable','Down-regulated'))
+
+id.labels.meta <- which(vol.cy.ctrl.16$log10p >=  1.3&abs(vol.cy.ctrl.16$logFC)>0.5849625)
+vol.cy.ctrl.16$names <- NA;vol.cy.ctrl.16[id.labels.meta,]$names <- (vol.cy.ctrl.16[id.labels.meta,]$genes)
+
+set.seed(100)
+Volcano.cy.ctrl.16 <- ggplot(data = vol.cy.ctrl.16,
+       aes(x = logFC,colour=Status,
+           y = vol.cy.ctrl.16$log10p,label=names)) +
+    geom_point( size=4) +
+    geom_text_repel(max.overlaps = 25,na.rm = T,color='black',segment.color = "grey50",size = 8)+
+    scale_color_manual(values=c("gold2", "lightgray","skyblue2"),breaks = c('Up-regulated','Stable','Down-regulated'))+
+    geom_vline(xintercept=c(-0.5849625,0.5849625),lty=4,col="black",lwd=0.5) +
+    geom_hline(yintercept = 1.3,lty=4,col="black",lwd=0.5) +
+    labs(x=expression(Log[2]~FC),
+         y=expression(-Log[10]~FDR),title='CPA vs. Ctrl (16h)')  +
+    theme_bw(base_size = 20,base_rect_size = 2)+
+    theme(plot.title = element_text(face='bold',size=20,hjust = 0.5),legend.position="bottom",
+          strip.background =element_rect(fill='white',color='white'),
+          panel.grid = element_blank())
+
+cy.ctrl.16.sig.genes <- cy.ctrl.16.genes[cy.ctrl.16.genes$FDR <=  1.3&abs(cy.ctrl.16.genes$logFC)>0.5849625,]
+#####  P 16 vs. 24
+
+group.cy.24.16<- factor(c('P16_8','P24_9'),levels = c('P16_8','P24_9'))
+                           
+tmp.keep <- rowSums(CellType.counts[,c('P16_8','P24_9')] > 0.5)>=2
+dge.cy.24.16<- DGEList(CellType.counts[,c('P16_8','P24_9')], group=group.cy.24.16, genes=rownames(CellType.counts[,c('P16_8','P24_9')]))
+dge.cy.24.16<- dge.cy.24.16[tmp.keep, ,keep.lib.sizes = FALSE]
+
+TMM.cy.24.16<- exactTest(calcNormFactors(dge.cy.24.16, method = "TMM"),dispersion = 0)
+res.cy.24.16<- TMM.cy.24.16$table
+res.cy.24.16$FDR <- p.adjust(res.cy.24.16$PValue,method = 'BH')
+res.cy.24.16$genes <- rownames(res.cy.24.16)
+
+cy.24.16.genes <- data.frame(genes=res.cy.24.16$genes,
+           logFC=res.cy.24.16$logFC,
+           p=res.cy.24.16$PValue,FDR=res.cy.24.16$FDR)
+
+cy.24.16.genes <- merge(cy.24.16.genes,data.annot[c('gene_name','gene_biotype','tf_family','gene_description')],by.x='genes',by.y='gene_name')
+
+vol.cy.24.16<- na.omit(as.data.frame(cy.24.16.genes))
+vol.cy.24.16$log10p <- -log10(vol.cy.24.16$FDR)
+vol.cy.24.16$Status = factor(ifelse(vol.cy.24.16$log10p >= 1.3 & vol.cy.24.16$logFC >= 0.5849625,'Up-regulated',
+                         ifelse(vol.cy.24.16$log10p >=  1.3 & vol.cy.24.16$logFC < -0.5849625,'Down-regulated',
+                                'Stable')),levels = c('Up-regulated','Stable','Down-regulated'))
+
+id.labels.meta <- which(vol.cy.24.16$log10p >=  1.3&abs(vol.cy.24.16$logFC)>0.5849625)
+vol.cy.24.16$names <- NA;vol.cy.24.16[id.labels.meta,]$names <- (vol.cy.24.16[id.labels.meta,]$genes)
+
+set.seed(100)
+Volcano.cy.24.16<- ggplot(data = vol.cy.24.16,
+       aes(x = logFC,colour=Status,
+           y = vol.cy.24.16$log10p,label=names)) +
+    geom_point(size=4) +
+    geom_text_repel(max.overlaps = 25,na.rm = T,color='black',segment.color = "grey50",size = 8)+
+    scale_color_manual(values=c("gold2", "lightgray","skyblue2"),breaks = c('Up-regulated','Stable','Down-regulated'))+
+    geom_vline(xintercept=c(-0.5849625,0.5849625),lty=4,col="black",lwd=0.5) +
+    geom_hline(yintercept = 1.3,lty=4,col="black",lwd=0.5) +
+    labs(x=expression(Log[2]~FC),
+         y=expression(-Log[10]~FDR),title='CPA (24h vs. 16h)')  +
+    theme_bw(base_size = 20,base_rect_size = 2)+
+    theme(plot.title = element_text(face='bold',size=20,hjust = 0.5),legend.position="bottom",
+          strip.background =element_rect(fill='white',color='white'),
+          panel.grid = element_blank())
+
+cy.24.16.sig.genes <- cy.24.16.genes[cy.24.16.genes$FDR <=  1.3&abs(cy.24.16.genes$logFC)>0.5849625,]
+
+Figure4DE <- ggarrange(Volcano.cy.ctrl.16,Volcano.cy.24.16,ncol = 2,nrow = 1,common.legend = T,legend = 'bottom',align = 'hv')
+
+set.seed(100)
+Figure4DE
+
+```
+
+<div align="center">
+
+###  Figure 4D and Figure 4E
+
+</div>
+
+```{r Figure4F,fig.align='center',fig.width=5,fig.height=10}
+
+up.list.Fig4 <- list('CT.C.16'=cy.ctrl.16.sig.genes[cy.ctrl.16.sig.genes$logFC>0.5849625,]$genes,
+                    'CT.24.16'=cy.24.16.sig.genes[cy.24.16.sig.genes$logFC>0.5849625,]$genes)
+
+dn.list.Fig4 <- list('CT.C.16'=cy.ctrl.16.sig.genes[cy.ctrl.16.sig.genes$logFC< -0.5849625,]$genes,
+                    'CT.24.16'=cy.24.16.sig.genes[cy.24.16.sig.genes$logFC< -0.5849625,]$genes)
+
+
+Figure4F <- ggarrange(ggvenn(data = up.list.Fig4,fill_alpha = 1,fill_color = c('gold2','gold4'),text_color = 'white',stroke_color = 'white',text_size = 10,show_percentage = F,set_name_size = 0)+labs(title='Shared/Unique\n(up-regulated genes)')+
+                                  theme(plot.title = element_text(face='bold',size=20,hjust = 0.5)),
+ggvenn(data = dn.list.Fig4,fill_alpha = 1,fill_color = c('skyblue2','darkblue'),text_color = 'white',stroke_color = 'white',text_size = 10,show_percentage = F,set_name_size = 0)+labs(title='Shared/Unique\n(down-regulated genes)')+
+                                  theme(plot.title = element_text(face='bold',size=20,hjust = 0.5)),ncol = 1,nrow = 2)
+
+Figure4F
+
+```
+
+<div align="center">
+
+###  Figure 4F
+
+</div>
+
+```{r Figure4GH,fig.align='center',fig.width=18,fig.height=9}
+cy.ctrl.16.sig.Upgenes.df <- cy.ctrl.16.sig.genes[cy.ctrl.16.sig.genes$logFC>0,]$genes
+cy.ctrl.16.sig.Dngenes.df <- cy.ctrl.16.sig.genes[cy.ctrl.16.sig.genes$logFC<0,]$genes
+
+set.seed(100)
+ego.cy.ctrl.16.Up <- enrichGO(gene = cy.ctrl.16.sig.Upgenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.cy.ctrl.16.Up <- ego.cy.ctrl.16.Up@result[ego.cy.ctrl.16.Up@result$p.adjust<0.05,]
+res.cy.ctrl.16.Up <- res.cy.ctrl.16.Up[order(res.cy.ctrl.16.Up$p.adjust,decreasing = F),][1:10,]
+res.cy.ctrl.16.Up$Description <- str_to_sentence(res.cy.ctrl.16.Up$Description)
+
+set.seed(100)
+ego.cy.ctrl.16.Dn <- enrichGO(gene = cy.ctrl.16.sig.Dngenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.cy.ctrl.16.Dn <- ego.cy.ctrl.16.Dn@result[ego.cy.ctrl.16.Dn@result$p.adjust<0.05,]
+res.cy.ctrl.16.Dn <- res.cy.ctrl.16.Dn[order(res.cy.ctrl.16.Dn$p.adjust,decreasing = F),][1:10,]
+res.cy.ctrl.16.Dn$Description <- str_to_sentence(res.cy.ctrl.16.Dn$Description)
+res.cy.ctrl.16.Dn$Count <- res.cy.ctrl.16.Dn$Count*-1
+
+res.cy.ctrl.16 <- rbind(res.cy.ctrl.16.Up,res.cy.ctrl.16.Dn)
+res.cy.ctrl.16$Status <- factor(rep(c('Up','Down'),each=10),levels = c('Up','Down'))
+
+res.cy.ctrl.16.BP.plot <- ggplot(res.cy.ctrl.16, aes(y=reorder(Description, Count), x=Count)) +
+    geom_col(aes(fill=res.cy.ctrl.16$Status%in%'Up'),width = 0.5,position = position_dodge(0.9)) +
+    scale_fill_manual(values = c('skyblue3','gold3'),breaks= c('FALSE','TRUE'),labels=c('Enriched in Down-regulated genes','Enriched in Up-regulated genes'),name=' ')+
+    labs(y="Biological processes", x="Gene counts",title = "CPA vs. Ctrl (16h)") +
+    scale_x_continuous(labels = abs)+theme_hc(base_size = 15)+
+    theme(strip.background.x = element_blank(),panel.grid = element_blank(),
+          axis.title.x = element_text(size=15,face = 'plain'),
+          title = element_text(face = 'bold',size = 12),
+          strip.text.x = element_blank(),legend.position = 'none',
+          axis.text.x= element_text(size = 15,face = 'bold'),
+          axis.text.y= element_text(size = 12))
+
+cy.24.16.sig.Upgenes.df <- cy.24.16.sig.genes[cy.24.16.sig.genes$logFC>0&cy.24.16.sig.genes$FDR<0.05,]$genes
+cy.24.16.sig.Dngenes.df <- cy.24.16.sig.genes[cy.24.16.sig.genes$logFC<0&cy.24.16.sig.genes$FDR<0.05,,]$genes
+
+set.seed(100)
+ego.cy.24.16.Up <- enrichGO(gene = cy.24.16.sig.Upgenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.cy.24.16.Up <- ego.cy.24.16.Up@result[ego.cy.24.16.Up@result$p.adjust<0.05,]
+res.cy.24.16.Up <- res.cy.24.16.Up[order(res.cy.24.16.Up$p.adjust,decreasing = F),][1:10,]
+res.cy.24.16.Up$Description <- str_to_sentence(res.cy.24.16.Up$Description)
+
+set.seed(100)
+ego.cy.24.16.Dn <- enrichGO(gene = cy.24.16.sig.Dngenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.cy.24.16.Dn <- ego.cy.24.16.Dn@result[ego.cy.24.16.Dn@result$p.adjust<0.05,]
+res.cy.24.16.Dn <- res.cy.24.16.Dn[order(res.cy.24.16.Dn$p.adjust,decreasing = F),][1:10,]
+res.cy.24.16.Dn$Description <- str_to_sentence(res.cy.24.16.Dn$Description)
+res.cy.24.16.Dn$Count <- res.cy.24.16.Dn$Count*-1
+
+res.cy.24.16 <- rbind(res.cy.24.16.Up,res.cy.24.16.Dn)
+res.cy.24.16$Status <- factor(rep(c('Up','Down'),each=10),levels = c('Up','Down'))
+res.cy.24.16 <- res.cy.24.16[!duplicated(res.cy.24.16$Description),]
+
+res.cy.24.16.BP.plot <- ggplot(res.cy.24.16, aes(y=reorder(Description, Count), x=Count)) +
+    geom_col(aes(fill=res.cy.24.16$Status%in%'Up'),width = 0.5,position = position_dodge(0.9)) +
+    scale_fill_manual(values = c('skyblue3','gold3'),breaks= c('FALSE','TRUE'),labels=c('Enriched in Down-regulated genes','Enriched in Up-regulated genes'),name=' ')+
+    labs(y="Biological processes", x="Gene counts",title = "CPA (24h vs. 16h)") +
+    scale_x_continuous(labels = abs)+theme_hc(base_size = 15)+
+    theme(strip.background.x = element_blank(),panel.grid = element_blank(),
+          axis.title.x = element_text(size=15,face = 'plain'),
+          title = element_text(face = 'bold',size = 12),
+          strip.text.x = element_blank(),legend.position = 'none',
+          axis.text.x= element_text(size = 15,face = 'bold'),
+          axis.text.y= element_text(size = 12))
+
+Figure4GH <- ggarrange(res.cy.ctrl.16.BP.plot,
+                          res.cy.24.16.BP.plot,common.legend = T,legend = 'bottom')
+
+Figure4GH
+```
+
+<div align="center">
+
+###  Figure 4G and Figure 4H
+
+</div>
+
+
+```{r Figure5A,fig.align='center',fig.width=10,fig.height=10}
+
+All.annot.df <- annot.df;All.annot.df$Treatment <- factor(All.annot.df$Treatment)
+All.df <- log.df[rownames(log.df)%in%genes.df$Genes,] 
+
+col_fun = colorRamp2(c(-2,-1,0,1,2), c("royalblue4","royalblue2","white","gold4","gold"))
+col_color.heatmap = list('Treatment' =treatment_colors,
+                      'Time'=time_colors)
+
+colAnnot.All = columnAnnotation(
+    'Treatment'=factor(All.annot.df$Treatment,levels = c("BT","Ctrl","CPA","CPA+AO","AO")),
+    'Time'=All.annot.df$Time,
+    col=col_color.heatmap,annotation_height=unit(c(rep(0.2,2)), "cm"),gp=gpar(col="white",lwd=0),show_legend=T,
+    annotation_name_gp= gpar(fontsize = 12))
+
+ht_opt$TITLE_PADDING = unit(c(5,5), "points")
+All.zscore <- na.omit(t(scale(t(All.df))))
+
+clust.row.All <- hcopt(as.dist(1-cor(t(All.zscore))),method="ward.D")
+
+set.seed(5)
+Figure5A <- draw(Heatmap(matrix = (All.zscore),name = 'z-score (log2 FPKM+1)',border = T,
+                             row_split = genes.df$Groups,
+                             cluster_row_slices = F,
+                             column_dend_height = unit(5,'mm'),
+                             row_dend_width = unit(5,'mm'),
+                             row_dend_side = 'right',
+                             show_column_names = F,
+                             heatmap_legend_param = list(direction='horizontal'),
+                             rect_gp = gpar(col = "white", lwd = 0),
+                             show_heatmap_legend = T,show_parent_dend_line = F,
+                             top_annotation = colAnnot.All,use_raster = F,
+                             col=col_fun,
+                             width = ncol(All.zscore)*unit(7, "mm"),
+                             row_title_gp = gpar(fontsize=12,fontface='bold'),show_row_names = F,
+                            ,row_dend_reorder = T),
+                    heatmap_legend_side='bottom',annotation_legend_side='bottom')
+ht_opt(RESET = TRUE)
+
+```
+
+<div align="center">
+
+###  Figure 5A
+
+</div>
+
+```{r Figure5B,eval=FALSE}
+
+data.All.PCA <- t(All.df)
+
+merged.data.All.PCA <- merge(data.All.PCA,All.annot.df,by.x='row.names',by.y='Samples',sort=F);rownames(merged.data.All.PCA) <- merged.data.All.PCA$Row.names;merged.data.All.PCA <- merged.data.All.PCA[,-1]
+tmp.All.PCA <- merged.data.All.PCA[,c(1:(ncol(merged.data.All.PCA)-(ncol(All.annot.df)-1)))]
+PCA <- prcomp(tmp.All.PCA)
+
+Figure5B <- autoplot(PCA,data=merged.data.All.PCA,colour='Time',frame=F,size=8,label.size=2,type=23,shape='Treatment')+
+    scale_fill_manual(breaks = names(time_colors),values = as.character(time_colors))+
+    scale_color_manual(breaks = names(time_colors),values = as.character(time_colors))+
+    theme_bw(base_size = 15,base_rect_size = 2)+theme(legend.position = 'right',strip.background.x = element_blank(),panel.grid = element_blank(),strip.text.x = element_blank())
+
+Figure5B
+```
+
+<div align="center">
+
+###  Figure 5B
+
+</div>
+
+```{r Figure5C,fig.align='center',fig.width=15,fig.height=12}
+gsva.All <- gsva.df.subset
+
+gsva.All <- merge(gsva.All,t(All.df['Mki67',]),
+                       by.x='Samples',by.y='row.names')
+colnames(gsva.All)[c(6,10)] <- c('Apoptosis activity','Ki67')
+
+gsva.All.melted <- reshape2::melt(gsva.All)
+
+Figure5C <- ggline(data = gsva.All.melted,
+       x = 'Time',y = 'value',group = 'Treatment',color = 'Treatment',size = 1,point.size = 3,
+       palette = c(treatment_colors),xlab = 'Time (hours)',ylab = 'Signatures activity level')+
+    facet_wrap(~variable,scales = 'free',ncol = 3)+
+    theme_pubclean(base_size = 20)+
+    theme_bw(base_size = 20)+
+    theme(strip.background.x = element_blank(),panel.grid = element_blank(),
+          axis.title = element_text(size=20,face = 'bold'),legend.position = 'none',
+          strip.background =element_rect(fill='white',color='black'),strip.text = element_text(face = 'bold'),
+          axis.text.x= element_text(size = 20,face = 'bold'),axis.text.y= element_text(size = 15,face = 'bold'))
+
+Figure5C
+
+```
+
+<div align="center">
+
+###  Figure 5C
+
+</div>
+
+```{r Figure5DE,fig.align='center',fig.width=14,fig.height=8}
+
+All.counts <- data.count[rownames(data.count)%in%genes.df$Genes,]
+group.anti.ctrl.16 <- factor(c('C16_3','A16_13'),levels = c('C16_3','A16_13'))
+                           
+tmp.keep <- rowSums(All.counts[,c('C16_3','A16_13')] > 0.5)>=2
+dge.anti.ctrl.16 <- DGEList(All.counts[,c('C16_3','A16_13')], group=group.anti.ctrl.16, genes=rownames(All.counts[,c('C16_3','A16_13')]))
+
+dge.anti.ctrl.16 <- dge.anti.ctrl.16[tmp.keep, ,keep.lib.sizes = FALSE]
+
+#normalize
+TMM.anti.ctrl.16 <- exactTest(calcNormFactors(dge.anti.ctrl.16, method = "TMM"),dispersion = 0)
+res.anti.ctrl.16 <- TMM.anti.ctrl.16$table
+res.anti.ctrl.16$FDR <- p.adjust(res.anti.ctrl.16$PValue,method = 'BH')
+res.anti.ctrl.16$genes <- rownames(res.anti.ctrl.16)
+
+anti.ctrl.16.genes <- data.frame(genes=res.anti.ctrl.16$genes,
+           logFC=res.anti.ctrl.16$logFC,
+           p=res.anti.ctrl.16$PValue,FDR=res.anti.ctrl.16$FDR)
+
+anti.ctrl.16.genes <- merge(anti.ctrl.16.genes,data.annot[c('gene_name','gene_biotype','tf_family','gene_description')],by.x='genes',by.y='gene_name')
+
+vol.anti.ctrl.16 <- na.omit(as.data.frame(anti.ctrl.16.genes))
+vol.anti.ctrl.16$log10p <- -log10(vol.anti.ctrl.16$FDR)
+vol.anti.ctrl.16$Status = factor(ifelse(vol.anti.ctrl.16$log10p >= 1.3 & vol.anti.ctrl.16$logFC >= 0.5849625,'Up-regulated',
+                         ifelse(vol.anti.ctrl.16$log10p >=  1.3 & vol.anti.ctrl.16$logFC < -0.5849625,'Down-regulated',
+                                'Stable')),levels = c('Up-regulated','Stable','Down-regulated'))
+
+id.labels.meta <- which(vol.anti.ctrl.16$log10p >=  1.3&abs(vol.anti.ctrl.16$logFC)>0.5849625)
+vol.anti.ctrl.16$names <- NA;vol.anti.ctrl.16[id.labels.meta,]$names <- (vol.anti.ctrl.16[id.labels.meta,]$genes)
+
+set.seed(100)
+Volcano.anti.ctrl.16 <- ggplot(data = vol.anti.ctrl.16,
+       aes(x = logFC,colour=Status,
+           y = vol.anti.ctrl.16$log10p,label=names)) +
+    geom_point( size=4) +
+    geom_text_repel(max.overlaps = 20,na.rm = T,color='black',segment.color = "grey50",size = 6)+
+    scale_color_manual(values=c("gold2", "lightgray","skyblue2"),breaks = c('Up-regulated','Stable','Down-regulated'))+
+    geom_vline(xintercept=c(-0.5849625,0.5849625),lty=4,col="black",lwd=0.5) +
+    geom_hline(yintercept = 1.3,lty=4,col="black",lwd=0.5) +
+    labs(x=expression(Log[2]~FC),
+         y=expression(-Log[10]~FDR),title='AO vs. Ctrl (16h)')  +
+    theme_bw(base_size = 20,base_rect_size = 2)+
+    theme(plot.title = element_text(face='bold',size=20,hjust = 0.5),legend.position="bottom",
+          strip.background =element_rect(fill='white',color='white'),
+          panel.grid = element_blank())
+
+anti.ctrl.16.sig.genes <- anti.ctrl.16.genes[anti.ctrl.16.genes$FDR <=  1.3&abs(anti.ctrl.16.genes$logFC)>0.5849625,]
+#####  Combination vs. P 16 
+
+group.comb.cy.16<- factor(c('C16_3','PA16_18'))
+                           
+tmp.keep <- rowSums(All.counts[,c('C16_3','PA16_18')] > 0.5)>=2
+dge.comb.cy.16<- DGEList(All.counts[,c('C16_3','PA16_18')], group=group.comb.cy.16, genes=rownames(All.counts[,c('C16_3','PA16_18')]))
+dge.comb.cy.16<- dge.comb.cy.16[tmp.keep, ,keep.lib.sizes = FALSE]
+
+TMM.comb.cy.16<- exactTest(calcNormFactors(dge.comb.cy.16, method = "TMM"),dispersion = 0)
+res.comb.cy.16<- TMM.comb.cy.16$table
+res.comb.cy.16$FDR <- p.adjust(res.comb.cy.16$PValue,method = 'BH')
+res.comb.cy.16$genes <- rownames(res.comb.cy.16)
+
+comb.cy.16.genes <- data.frame(genes=res.comb.cy.16$genes,
+           logFC=res.comb.cy.16$logFC,
+           p=res.comb.cy.16$PValue,FDR=res.comb.cy.16$FDR)
+
+comb.cy.16.genes <- merge(comb.cy.16.genes,data.annot[c('gene_name','gene_biotype','tf_family','gene_description')],by.x='genes',by.y='gene_name')
+
+vol.comb.cy.16<- na.omit(as.data.frame(comb.cy.16.genes))
+vol.comb.cy.16$log10p <- -log10(vol.comb.cy.16$FDR)
+vol.comb.cy.16$Status = factor(ifelse(vol.comb.cy.16$log10p >= 1.3 & vol.comb.cy.16$logFC >= 0.5849625,'Up-regulated',
+                         ifelse(vol.comb.cy.16$log10p >=  1.3 & vol.comb.cy.16$logFC < -0.5849625,'Down-regulated',
+                                'Stable')),levels = c('Up-regulated','Stable','Down-regulated'))
+
+id.labels.meta <- which(vol.comb.cy.16$log10p >=  1.3&abs(vol.comb.cy.16$logFC)>0.5849625)
+vol.comb.cy.16$names <- NA;vol.comb.cy.16[id.labels.meta,]$names <- (vol.comb.cy.16[id.labels.meta,]$genes)
+
+set.seed(100)
+Volcano.comb.cy.16<- ggplot(data = vol.comb.cy.16,
+       aes(x = logFC,colour=Status,
+           y = vol.comb.cy.16$log10p,label=names)) +
+    geom_point(size=4) +
+    geom_text_repel(max.overlaps = 20,na.rm = T,color='black',segment.color = "grey50",size = 6)+
+    scale_color_manual(values=c("gold2", "lightgray","skyblue2"),breaks = c('Up-regulated','Stable','Down-regulated'))+
+    geom_vline(xintercept=c(-0.5849625,0.5849625),lty=4,col="black",lwd=0.5) +
+    geom_hline(yintercept = 1.3,lty=4,col="black",lwd=0.5) +
+    labs(x=expression(Log[2]~FC),
+         y=expression(-Log[10]~FDR),title='CPA+AO vs. CPA (16h)')  +
+    theme_bw(base_size = 20,base_rect_size = 2)+
+    theme(plot.title = element_text(face='bold',size=20,hjust = 0.5),legend.position="bottom",
+          strip.background =element_rect(fill='white',color='white'),
+          panel.grid = element_blank())
+
+comb.cy.16.sig.genes <- comb.cy.16.genes[comb.cy.16.genes$FDR <=  1.3&abs(comb.cy.16.genes$logFC)>0.5849625,]
+
+Figure5DE <- ggarrange(Volcano.anti.ctrl.16,Volcano.comb.cy.16,ncol = 2,nrow = 1,common.legend = T,legend = 'bottom',align = 'hv')
+
+set.seed(100)
+Figure5DE
+
+```
+
+<div align="center">
+
+###  Figure 5D and Figure 5E
+
+</div>
+
+```{r Figure5F,fig.align='center',fig.width=5,fig.height=10}
+
+up.list.Fig5 <- list('anti.ctrl.16'=anti.ctrl.16.sig.genes[anti.ctrl.16.sig.genes$logFC>0.5849625,]$genes,
+                    'Comb.Cy.16'=comb.cy.16.sig.genes[comb.cy.16.sig.genes$logFC>0.5849625,]$genes)
+
+dn.list.Fig5 <- list('anti.ctrl.16'=anti.ctrl.16.sig.genes[anti.ctrl.16.sig.genes$logFC< -0.5849625,]$genes,
+                    'Comb.Cy.16'=comb.cy.16.sig.genes[comb.cy.16.sig.genes$logFC< -0.5849625,]$genes)
+
+
+Figure5F <- ggarrange(ggvenn(data = up.list.Fig5,fill_alpha = 1,fill_color = c('gold2','gold4'),text_color = 'white',stroke_color = 'white',text_size = 10,show_percentage = F,set_name_size = 0)+labs(title='Shared/Unique\n(up-regulated genes)')+
+                                  theme(plot.title = element_text(face='bold',size=20,hjust = 0.5)),
+ggvenn(data = dn.list.Fig5,fill_alpha = 1,fill_color = c('skyblue2','darkblue'),text_color = 'white',stroke_color = 'white',text_size = 10,show_percentage = F,set_name_size = 0)+labs(title='Shared/Unique\n(down-regulated genes)')+
+                                  theme(plot.title = element_text(face='bold',size=20,hjust = 0.5)),ncol = 1,nrow = 2)
+
+Figure5F
+
+```
+
+<div align="center">
+
+###  Figure 5F
+
+</div>
+
+```{r Figure5GH,fig.align='center',fig.width=18,fig.height=9}
+anti.ctrl.16.sig.Upgenes.df <- anti.ctrl.16.sig.genes[anti.ctrl.16.sig.genes$logFC>0,]$genes
+anti.ctrl.16.sig.Dngenes.df <- anti.ctrl.16.sig.genes[anti.ctrl.16.sig.genes$logFC<0,]$genes
+
+set.seed(100)
+ego.anti.ctrl.16.Up <- enrichGO(gene = anti.ctrl.16.sig.Upgenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.anti.ctrl.16.Up <- ego.anti.ctrl.16.Up@result[ego.anti.ctrl.16.Up@result$p.adjust<0.05,]
+res.anti.ctrl.16.Up <- res.anti.ctrl.16.Up[order(res.anti.ctrl.16.Up$p.adjust,decreasing = F),][1:10,]
+res.anti.ctrl.16.Up$Description <- str_to_sentence(res.anti.ctrl.16.Up$Description)
+
+set.seed(100)
+ego.anti.ctrl.16.Dn <- enrichGO(gene = anti.ctrl.16.sig.Dngenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.anti.ctrl.16.Dn <- ego.anti.ctrl.16.Dn@result[ego.anti.ctrl.16.Dn@result$p.adjust<0.05,]
+res.anti.ctrl.16.Dn <- res.anti.ctrl.16.Dn[order(res.anti.ctrl.16.Dn$p.adjust,decreasing = F),][1:10,]
+res.anti.ctrl.16.Dn$Description <- str_to_sentence(res.anti.ctrl.16.Dn$Description)
+res.anti.ctrl.16.Dn$Count <- res.anti.ctrl.16.Dn$Count*-1
+
+res.anti.ctrl.16 <- rbind(res.anti.ctrl.16.Up,res.anti.ctrl.16.Dn)
+res.anti.ctrl.16$Status <- factor(rep(c('Up','Down'),each=10),levels = c('Up','Down'))
+
+res.anti.ctrl.16.BP.plot <- ggplot(res.anti.ctrl.16, aes(y=reorder(Description, Count), x=Count)) +
+    geom_col(aes(fill=res.anti.ctrl.16$Status%in%'Up'),width = 0.5,position = position_dodge(0.9)) +
+    scale_fill_manual(values = c('skyblue3','gold3'),breaks= c('FALSE','TRUE'),labels=c('Enriched in Down-regulated genes','Enriched in Up-regulated genes'),name=' ')+
+    labs(y="Biological processes", x="Gene counts",title = "AO vs. Ctrl (16h)") +
+    scale_x_continuous(labels = abs)+theme_hc(base_size = 15)+
+    theme(strip.background.x = element_blank(),panel.grid = element_blank(),
+          axis.title.x = element_text(size=15,face = 'plain'),
+          title = element_text(face = 'bold',size = 12),
+          strip.text.x = element_blank(),legend.position = 'none',
+          axis.text.x= element_text(size = 15,face = 'bold'),
+          axis.text.y= element_text(size = 12))
+
+comb.cy.16.sig.Upgenes.df <- comb.cy.16.sig.genes[comb.cy.16.sig.genes$logFC>0,]$genes
+comb.cy.16.sig.Dngenes.df <- comb.cy.16.sig.genes[comb.cy.16.sig.genes$logFC<0,]$genes
+
+set.seed(100)
+ego.comb.cy.16.Up <- enrichGO(gene = comb.cy.16.sig.Upgenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.comb.cy.16.Up <- ego.comb.cy.16.Up@result[ego.comb.cy.16.Up@result$p.adjust<0.05,]
+res.comb.cy.16.Up <- res.comb.cy.16.Up[order(res.comb.cy.16.Up$p.adjust,decreasing = F),][1:10,]
+res.comb.cy.16.Up$Description <- str_to_sentence(res.comb.cy.16.Up$Description)
+
+set.seed(100)
+ego.comb.cy.16.Dn <- enrichGO(gene = comb.cy.16.sig.Dngenes.df,OrgDb = org.Mm.eg.db,         
+                keyType = "SYMBOL", ont = "BP",pvalueCutoff = 0.05,qvalueCutoff = 0.05,readable = TRUE)       
+
+res.comb.cy.16.Dn <- ego.comb.cy.16.Dn@result[ego.comb.cy.16.Dn@result$p.adjust<0.05,]
+res.comb.cy.16.Dn <- res.comb.cy.16.Dn[order(res.comb.cy.16.Dn$p.adjust,decreasing = F),][1:10,]
+res.comb.cy.16.Dn$Description <- str_to_sentence(res.comb.cy.16.Dn$Description)
+res.comb.cy.16.Dn$Count <- res.comb.cy.16.Dn$Count*-1
+
+res.comb.cy.16 <- rbind(res.comb.cy.16.Up,res.comb.cy.16.Dn)
+res.comb.cy.16$Status <- factor(rep(c('Up','Down'),each=10),levels = c('Up','Down'))
+
+res.comb.cy.16.BP.plot <- ggplot(res.comb.cy.16, aes(y=reorder(paste(Description, Status), Count), x=Count)) +
+    geom_col(aes(fill=res.comb.cy.16$Status%in%'Up'), width = 0.5, position = position_dodge(0.9)) +
+    scale_fill_manual(values = c('skyblue3','gold3'), breaks= c('FALSE','TRUE'),
+                      labels = c('Enriched in Down-regulated genes', 'Enriched in Up-regulated genes'),
+                      name = ' ') +
+    labs(y = "Biological processes", x = "Gene counts", title = "CPA+AO vs. CPA (16h)") +
+    scale_x_continuous(labels = abs) + 
+    theme_hc(base_size = 15) +
+    theme(strip.background.x = element_blank(), panel.grid = element_blank(),
+          axis.title.x = element_text(size = 15, face = 'plain'),
+          title = element_text(face = 'bold', size = 12),
+          strip.text.x = element_blank(), legend.position = 'none',
+          axis.text.x = element_text(size = 15, face = 'bold'),
+          axis.text.y = element_text(size = 12)) +
+    scale_y_discrete(labels = function(x) gsub(" Up| Down", "", x))
+
+Figure5GH <- ggarrange(res.anti.ctrl.16.BP.plot,
+                          res.comb.cy.16.BP.plot,common.legend = T,legend = 'bottom')
+
+Figure5GH
+```
+
+<div align="center">
+
+###  Figure 5G and Figure 5H
+
+</div>
