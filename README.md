@@ -5,4 +5,4 @@ This is the GitHub for the publication by Eskafinoghani et al. (https://doi.org/
 The full set of figures generated from the R Markdown analysis can be viewed here:
 View [figures](figures/RMD.pdf)
 
-All required files to run the code will be uploaded on Zenodo:
+All required files to run the code will be uploaded on Zenodo: https://zenodo.org/records/18141728
